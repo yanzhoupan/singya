@@ -1,5 +1,6 @@
 from pandas.core.frame import DataFrame
 from matplotlib.pyplot import MultipleLocator
+from pygame import mixer
 from scipy import stats
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
@@ -10,6 +11,7 @@ import librosa.display
 import pandas as pd
 import numpy as np
 import copy
+import musicalbeeps
 
 XTICKS_SPACE=30
 
@@ -29,6 +31,10 @@ class Singya(object):
         self.note_values_with_octave = None
         self.pitches = None
         self.magnitudes = None
+
+        self._y_labels = self._gen_y_labels()
+        self._x_coords = librosa.core.frames_to_time(np.arange(self.pitches.shape[1] + 1), sr=self.rate)
+        self._x_coords = [format(x, ".1f") for x in self.x_coords]
 
 
     def record_song(self):
@@ -83,6 +89,15 @@ class Singya(object):
         # calculate pitch based on self.note_values and detect_pitch
         self._set_note_octave(n_smooth=3)
 
+        # calculate playable list
+        self._convert_to_playable_notes()
+
+
+    def play_recorded_song(self):
+        mixer.init()
+        mixer.music.load(self.song_wav)
+        mixer.music.play()
+
     
     def _gen_y_labels(self):
         n_octave = 7 # chroma_cqt supports 7 octaves by default
@@ -110,12 +125,19 @@ class Singya(object):
         return notes
 
     
-    # set self.note_value_with_octave based on majority
     def _set_note_octave(self, n_smooth):
+        """
+        set self.note_value_with_octave based on majority
+        """
         notes = self._pitch_hz_to_note()
-        octaves = [int(note[-1]) for note in notes]
+        # print("notes: ", notes)
+        
+        # use note[-1] because note style is "C#3", octave is in the end
+        octaves = [int(note[-1]) for note in notes] 
+
         # print("octaves: ", len(octaves), octaves)
         # print("note_values: ", len(self.note_values), self.note_values)
+        
         self.note_values_with_octave = copy.deepcopy(self.note_values)
 
         left, right = 0, 1
@@ -135,7 +157,6 @@ class Singya(object):
 
                     if left_value != -1:
                         self.note_values_with_octave[left:right] = [left_value]*(right-left)
-                        # print("smooth: ", left, right, self.note_values_with_octave[left:right], self.note_values_with_octave[left-1])
                         curr_note = self.note_values[right]
                         left = right
                         right = left + 1
@@ -161,15 +182,39 @@ class Singya(object):
     
 
     def _calculate_note_octave(self, left, right, octave):
+        """
+        calculated note_values_with_octave
+        the real place of a note should be (note_value+12*octave)
+        """
         # print("ori: ", self.note_values_with_octave[left:right])
         # print("to set: ", [self.note_values[left] + 12 * octave] * (right-left))
         self.note_values_with_octave[left:right] = \
             [self.note_values[left] + 12 * octave] * (right-left)
     
 
-    def _smooth_notes(self, n_smooth=0):
+     
+    def _convert_to_playable_notes(self):
+        """
+        convert note_values_with_octave to a list of [note, duration]
+        for example [("C", 1), ("D3#", 0.25)]
+        notice that musicalbeetps requires octave number to be in the middle
+        """
+        return
 
+
+    def play_detected_notes(self):
+        """
+        play the detedted notes (with octave) using musicalbeeps
+        """
         return 
+
+
+    def convert_to_guitar_sheet(self):
+        """
+        convert the detected notes to guitar sheet
+        do some clustering to provide a more reasonable key arrangement
+        """
+        return
 
 
     def draw_chromagram(self):
@@ -212,14 +257,12 @@ class Singya(object):
 
         plt.grid(linewidth=0.5)
         plt.xlim(0, self.pitches.shape[1])
-        y_labels = self._gen_y_labels()
-        plt.yticks(range(1, len(y_labels)+1), y_labels)
+        plt.yticks(range(1, len(self._y_labels)+1), self._y_labels)
         
         # ax.yaxis.set_major_locator(MultipleLocator(10))
         plt.ylim(y_min, y_max)
 
-        x_coords = librosa.core.frames_to_time(np.arange(self.pitches.shape[1] + 1), sr=self.rate)
-        x_coords = [format(x, ".1f") for x in x_coords]
-        plt.xticks(np.arange(self.pitches.shape[1] + 1)[::XTICKS_SPACE], x_coords[::XTICKS_SPACE])
+        
+        plt.xticks(np.arange(self.pitches.shape[1] + 1)[::XTICKS_SPACE], self._x_coords[::XTICKS_SPACE])
 
 
