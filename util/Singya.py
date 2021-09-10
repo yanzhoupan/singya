@@ -1,3 +1,4 @@
+from numpy.core.records import record
 from pandas.core.frame import DataFrame
 from matplotlib.pyplot import MultipleLocator
 from pygame import mixer
@@ -11,12 +12,16 @@ import librosa.display
 import pandas as pd
 import numpy as np
 import copy
+import msvcrt
+import sys
 import musicalbeeps
+import threading
+import time
 
 XTICKS_SPACE=30
 
 class Singya(object):
-    def __init__(self, song_wav="./song.wav", channels=1, format=pyaudio.paInt16, rate=22050, record_time=5) -> None:
+    def __init__(self, song_wav="./audio/song.wav", channels=1, format=pyaudio.paInt16, rate=22050, record_time=-1) -> None:
         super().__init__()
         self.song_wav = song_wav
         self.channels = channels
@@ -31,10 +36,10 @@ class Singya(object):
         self.note_values_with_octave = None
         self.pitches = None
         self.magnitudes = None
+        self.recording = True
 
-        self._y_labels = self._gen_y_labels()
-        self._x_coords = librosa.core.frames_to_time(np.arange(self.pitches.shape[1] + 1), sr=self.rate)
-        self._x_coords = [format(x, ".1f") for x in self.x_coords]
+        self._y_labels = None
+        self._x_coords = None
 
 
     def record_song(self):
@@ -46,12 +51,38 @@ class Singya(object):
             input = True,
             frames_per_buffer = self.chunk)
 
-        print("***Start recording***")
+        def key_capture_thread():
+            global RECORDING
+            press_key = input()
+            if press_key == "":
+                self.recording = False
+
         frames = []
-        for _ in range(int(self.record_time*self.rate/self.chunk)):
-            data = stream.read(self.chunk)
-            frames.append(data)
-        print("***End recording***")
+        if self.record_time > 0:
+            print("***Start recording***")
+            for _ in range(int(self.record_time*self.rate/self.chunk)):
+                data = stream.read(self.chunk)
+                frames.append(data)
+            print("***End recording***")
+        else:
+            print("***Press enter to start***")
+            while True:
+                c = input()
+                if c == "":
+                    break
+            start_time = time.time()
+            print("***Start recording, press enter to stop***")
+            threading.Thread(target=key_capture_thread, args=(), name='key_capture_thread', daemon=True).start()
+            while self.recording:
+                data = stream.read(self.chunk)
+                frames.append(data)
+            end_time = time.time()
+            duration = (end_time - start_time)
+            self.record_time = duration
+            print("***End recording***")
+
+            self.recording = True # for next run
+
 
         stream.stop_stream()
         stream.close()
@@ -85,6 +116,10 @@ class Singya(object):
         self.chromagram = chromagram
         self.note_values = labels.dot(chroma_detected)
         self.pitches, self.magnitudes = librosa.piptrack(y=data, sr=sr)
+
+        self._y_labels = self._gen_y_labels()
+        self._x_coords = librosa.core.frames_to_time(np.arange(self.pitches.shape[1] + 1), sr=self.rate)
+        self._x_coords = [format(x, ".1f") for x in self._x_coords]
 
         # calculate pitch based on self.note_values and detect_pitch
         self._set_note_octave(n_smooth=3)
