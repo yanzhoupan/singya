@@ -4,7 +4,8 @@ pitch dection
 # TODO
 - More kinds of plots: done
 - Note detection with octave and visualization: done
-- Play the detected notes
+- Play the detected notes: done
+- Handle the pause
 - Handle the start & end point abnormal notes
 - Re org the folder structure, add .gitignore for wav data folder
 - Add support for unlimited record time

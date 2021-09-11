@@ -114,13 +114,14 @@ class Singya(object):
         chroma_detected = (chroma_df==1).astype(int)
         labels=np.array(range(1,13))
 
-        # save variables to self
+        # save variables to object
         if self.record_time <= 0:
             with contextlib.closing(wave.open(file_path,'r')) as f:
                 frames = f.getnframes()
                 rate = f.getframerate()
                 duration = frames / float(rate)
                 self.record_time = duration
+
         self.data = data
         self.chromagram = chromagram
         self.note_values = labels.dot(chroma_detected)
@@ -128,10 +129,10 @@ class Singya(object):
 
         self._y_labels = self._gen_y_labels()
         self._x_coords = librosa.core.frames_to_time(np.arange(self.pitches.shape[1]), sr=self.rate)
-        self._x_coords = [format(x, ".1f") for x in self._x_coords]
+        self._x_coords = [format(x, ".2f") for x in self._x_coords]
 
         # calculate pitch based on self.note_values and detect_pitch
-        self._set_note_octave(n_smooth=3)
+        self._set_note_octave(n_smooth=5)
 
         # calculate playable list
         self._convert_to_playable_notes()
@@ -240,22 +241,43 @@ class Singya(object):
     def _convert_to_playable_notes(self):
         """
         convert note_values_with_octave to a list of [note, duration]
-        for example [("C", 1), ("D3#", 0.25)]
+        for example [("C", 1), ("D3#", 0.5)]
         notice that musicalbeetps requires octave number to be in the middle
         """
-        playable_notes = [("C", 1), ("D3#", 0.5)]
+        playable_notes = [] # eg: [("C", 1), ("D3#", 0.5)]
+        
+        idx, curr_note = 1, self.note_values_with_octave[0]
+        timestamp = 0
+        while idx < len(self.note_values_with_octave):
+            new_note = self.note_values_with_octave[idx]
+            new_timestamp = float(self._x_coords[idx])
+            if new_note != curr_note:
+                playable_notes.append((self._y_labels[curr_note-1], new_timestamp-timestamp))      
+                curr_note = new_note
+                timestamp = new_timestamp
+            idx += 1
+
         self.playable_notes = playable_notes
+        print(self.playable_notes)
 
 
-    def play_detected_notes(self):
+
+    def play_detected_notes(self, volume=0.5):
         """
         play the detedted notes (with octave) using musicalbeeps
         """
-        print("note_values: ", len(self.note_values), self.note_values)
+        # print("note_values: ", len(self.note_values), self.note_values)
         print("note_values_with_octave: ", len(self.note_values_with_octave), self.note_values_with_octave)
-        print("x_coord (time): ", len(self._x_coords), self._x_coords)
-        print("y_coord (note with octvave): ", len(self._y_labels), self._y_labels)
-        return 
+        # print("x_coord (time): ", len(self._x_coords), self._x_coords)
+        # print("y_coord (note with octvave): ", len(self._y_labels), self._y_labels)
+
+        player = musicalbeeps.Player(volume=volume, mute_output=False)
+        for playable_note in self.playable_notes:
+            note, duration = playable_note
+            if len(note) == 3:
+                note = note[0]+note[2]+note[1]
+            player.play_note(note, duration)
+         
 
 
     def convert_to_guitar_sheet(self):
@@ -270,7 +292,7 @@ class Singya(object):
         fig = plt.figure(figsize=(15, 5))
         ax = fig.add_subplot(111)
         librosa.display.specshow(self.chromagram, x_axis='time', y_axis='chroma', cmap='coolwarm')
-        ax.yaxis.set_major_formatter(librosa.display.NoteFormatter())
+        # ax.yaxis.set_major_formatter(librosa.display.NoteFormatter())
         plt.show()
 
 
