@@ -17,6 +17,8 @@ import sys
 import musicalbeeps
 import threading
 import time
+import contextlib
+
 
 XTICKS_SPACE=30
 
@@ -34,6 +36,7 @@ class Singya(object):
         self.chromagram = None
         self.note_values = None
         self.note_values_with_octave = None
+        self.playable_notes = None
         self.pitches = None
         self.magnitudes = None
         self.recording = True
@@ -112,13 +115,19 @@ class Singya(object):
         labels=np.array(range(1,13))
 
         # save variables to self
+        if self.record_time <= 0:
+            with contextlib.closing(wave.open(file_path,'r')) as f:
+                frames = f.getnframes()
+                rate = f.getframerate()
+                duration = frames / float(rate)
+                self.record_time = duration
         self.data = data
         self.chromagram = chromagram
         self.note_values = labels.dot(chroma_detected)
         self.pitches, self.magnitudes = librosa.piptrack(y=data, sr=sr)
 
         self._y_labels = self._gen_y_labels()
-        self._x_coords = librosa.core.frames_to_time(np.arange(self.pitches.shape[1] + 1), sr=self.rate)
+        self._x_coords = librosa.core.frames_to_time(np.arange(self.pitches.shape[1]), sr=self.rate)
         self._x_coords = [format(x, ".1f") for x in self._x_coords]
 
         # calculate pitch based on self.note_values and detect_pitch
@@ -234,13 +243,18 @@ class Singya(object):
         for example [("C", 1), ("D3#", 0.25)]
         notice that musicalbeetps requires octave number to be in the middle
         """
-        return
+        playable_notes = [("C", 1), ("D3#", 0.5)]
+        self.playable_notes = playable_notes
 
 
     def play_detected_notes(self):
         """
         play the detedted notes (with octave) using musicalbeeps
         """
+        print("note_values: ", len(self.note_values), self.note_values)
+        print("note_values_with_octave: ", len(self.note_values_with_octave), self.note_values_with_octave)
+        print("x_coord (time): ", len(self._x_coords), self._x_coords)
+        print("y_coord (note with octvave): ", len(self._y_labels), self._y_labels)
         return 
 
 
@@ -275,9 +289,8 @@ class Singya(object):
         plt.grid(linewidth=0.5)
         plt.xlim(0, self.pitches.shape[1])
         plt.yticks(range(1,13), ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"])
-        x_coords = librosa.core.frames_to_time(np.arange(self.pitches.shape[1] + 1), sr=self.rate)
-        x_coords = [format(x, ".1f") for x in x_coords]
-        plt.xticks(np.arange(self.pitches.shape[1] + 1)[::XTICKS_SPACE], x_coords[::XTICKS_SPACE])
+        
+        plt.xticks(np.arange(self.pitches.shape[1] + 1)[::XTICKS_SPACE], self._x_coords[::XTICKS_SPACE])
 
 
     # Recommended
@@ -297,7 +310,4 @@ class Singya(object):
         # ax.yaxis.set_major_locator(MultipleLocator(10))
         plt.ylim(y_min, y_max)
 
-        
         plt.xticks(np.arange(self.pitches.shape[1] + 1)[::XTICKS_SPACE], self._x_coords[::XTICKS_SPACE])
-
-
